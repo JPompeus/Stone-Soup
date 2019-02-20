@@ -4,10 +4,10 @@ import datetime
 import numpy as np
 from scipy.spatial import distance
 
-from .. import measures
+import stonesoup.measures as measures
 
-from ..types.array import StateVector, CovarianceMatrix
-from ..types.state import GaussianState
+from stonesoup.types.array import StateVector, CovarianceMatrix
+from stonesoup.types.state import GaussianState
 
 # Create a time stamp to use for both states
 t = datetime.datetime.now()
@@ -44,13 +44,13 @@ def test_mahalanobis():
 
 
 def test_hellinger():
-    measure = measures.GaussianHellinger()
+    measure = measures.Hellinger()
     # Distance value obtained from MATLAB
     assert np.isclose(measure(state_u, state_v), 0.665, atol=1e-3)
 
 
 def test_zero_hellinger():
-    measure = measures.GaussianHellinger()
+    measure = measures.Hellinger()
     # Set target ground truth prior
     u = StateVector([[10], [1], [10], [1]])
     ui = CovarianceMatrix(np.diag([0, 0, 0, 0]))
@@ -65,24 +65,24 @@ def test_zero_hellinger():
 
 
 def test_squared_hellinger():
-    measure = measures.SquaredGaussianHellinger()
+    measure = measures.SquaredHellinger()
     # Distance value obtained from MATLAB
     assert np.isclose(measure(state_u, state_v), 0.444, atol=1e-3)
 
 
 def test_hellinger_full_mapping():
     mapping = np.arange(len(u))
-    measure = measures.GaussianHellinger(mapping=mapping)
+    measure = measures.Hellinger(mapping=mapping)
     assert np.isclose(measure(state_u, state_v), 0.665, atol=1e-3)
 
 
 def test_hellinger_partial_mapping():
     # Distance value obtained from MATLAB
     mapping = np.array([0, 1])
-    measure = measures.GaussianHellinger(mapping=mapping)
+    measure = measures.Hellinger(mapping=mapping)
     assert np.isclose(measure(state_u, state_v), 0.4555, atol=1e-3)
     mapping = np.array([0, 3])
-    measure = measures.GaussianHellinger(mapping=mapping)
+    measure = measures.Hellinger(mapping=mapping)
     assert np.isclose(measure(state_u, state_v), 0.3701, atol=1e-3)
 
 
