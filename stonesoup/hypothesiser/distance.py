@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 from .base import Hypothesiser
 from ..base import Property
-from ..measures import Measure
+from ..types import SingleDistanceHypothesis
+from ..types.multihypothesis import MultipleHypothesis
 from ..predictor import Predictor
 from ..types.multihypothesis import \
     MultipleHypothesis
@@ -99,4 +100,72 @@ class DistanceHypothesiser(Hypothesiser):
                         distance,
                         measurement_prediction))
 
-        return MultipleHypothesis(sorted(hypotheses, reverse=True))
+        return sorted(hypotheses, reverse=True)
+
+
+class GMMahalanobisDistanceHypothesiser(Hypothesiser):
+    """Gaussian Mixture Prediction Hypothesiser based on Mahalanobis Distance
+
+    Generate Gaussian Mixture component predictions at detection times and
+    score each hypothesised prediction-detection pair using the Mahalanobis
+    Distance.
+    """
+
+    predictor = Property(
+        Predictor,
+        doc="Predict tracks to detection times")
+    updater = Property(
+        Updater,
+        doc="Updater used to get measurement prediction")
+    association_distance = Property(
+        int,
+        default=4,
+        doc="Distance in standard deviations at which association between "
+            "Gaussian Mixture component and detection is low enough to be "
+            "ignored.")
+
+    def hypothesise(self, predict_state, detections, timestamp):
+        """Form hypotheses for associations between Detections and Gaussian
+        Mixture components, discard those with too great a distance.
+
+        Parameters
+        ----------
+        predict_state : :class:`list`
+            List of :class:`WeightedGaussianState` components
+            representing the predicted state of the space
+        detections : list of :class:`Detection`
+            Retrieved measurements
+        timestamp : datetime
+            time of the detections/predicted state
+
+        Returns
+        -------
+        list of :class:`MultipleHypothesis`
+            each MultipleHypothesis in the list contains SingleHypotheses
+            pertaining to the same Detection
+        """
+
+        hypotheses = list()
+
+        for detection in detections:
+
+            this_detect_hypotheses = list()
+
+            for component in predict_state:
+                measurement_prediction = \
+                    self.updater.get_measurement_prediction(component)
+                distance = mahalanobis(detection.state_vector,
+                                       measurement_prediction.state_vector,
+                                       np.linalg.inv(
+                                           measurement_prediction.covar))
+
+                if distance < self.association_distance:
+                    this_detect_hypotheses.append(
+                        SingleDistanceHypothesis(
+                            component, detection, distance,
+                            measurement_prediction=measurement_prediction))
+
+            if len(this_detect_hypotheses) > 0:
+                hypotheses.append(MultipleHypothesis(this_detect_hypotheses))
+
+        return hypotheses
