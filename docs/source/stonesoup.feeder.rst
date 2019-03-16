@@ -14,7 +14,7 @@ Filter
     :show-inheritance:
 
 Geo
----
+===
 
 .. automodule:: stonesoup.feeder.geo
     :show-inheritance:

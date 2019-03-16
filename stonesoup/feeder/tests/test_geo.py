@@ -3,21 +3,22 @@ import pymap3d
 import pytest
 import utm
 
-from ...buffered_generator import BufferedGenerator
-from ...reader import DetectionReader
 from ...types.detection import Detection
 from ..geo import LongLatToUTMConverter, LLAtoENUConverter, LLAtoNEDConverter
 
 
 @pytest.fixture()
 def detector():
-    class Detector(DetectionReader):
+    class Detector:
 
-        @BufferedGenerator.generator_method
+        @property
+        def detections(self):
+            return self._detections
+
         def detections_gen(self):
             for i in range(-3, 4):
-                detections = {Detection([[i], [50], [5000 + i*10]])}
-                yield None, detections
+                self._detections = {Detection([[i], [50], [5000 + i*10]])}
+                yield None, self.detections
 
     return Detector()
 
@@ -31,7 +32,8 @@ def detector():
 def test_lla_reference_converter(detector, converter_class, reverse_func):
     converter = converter_class(detector, reference_point=(0, 50, 5000))
 
-    for i, (time, detections) in zip(range(-3, 4), converter):
+    for i, (time, detections) in zip(
+            range(-3, 4), converter.detections_gen()):
         detection = detections.pop()
 
         assert pytest.approx((50, i, 5000 + i*10), abs=1e-2, rel=1e-3) == \
@@ -44,7 +46,8 @@ def test_utm_converter(detector):
     p_east = float('-inf')
     assert converter.zone_number is None
 
-    for long, (time, detections) in zip(range(-3, 4), converter):
+    for long, (time, detections) in zip(
+            range(-3, 4), converter.detections_gen()):
         detection = detections.pop()
 
         assert converter.zone_number == 30
