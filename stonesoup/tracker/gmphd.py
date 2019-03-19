@@ -132,3 +132,5 @@ class GMPHDTargetTracker(GaussianMixtureMultiTargetTracker):
         self.gaussian_mixture.components = updated_components
         self.gaussian_mixture.components = \
             self.reducer.reduce(self.gaussian_mixture.components)
+        # Update the tracks
+        self.tracks_gen()

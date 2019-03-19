@@ -110,6 +110,7 @@ def test_gmphd_multi_target_tracker_cycle(
         birth_component=birth_component
         )
     tracker.predict(timestamp+datetime.timedelta(seconds=1))
+    # Check predicted values
     for component in tracker.gaussian_mixture:
         if component.tag == 2:
             assert component.state_vector == components[0].state_vector+1
@@ -121,6 +122,7 @@ def test_gmphd_multi_target_tracker_cycle(
                            timestamp=timestamp+datetime.timedelta(seconds=1))
     detections = {detection1, detection2}
     tracker.update(detections, timestamp+datetime.timedelta(seconds=1))
+    # Check updated values
     for component in tracker.gaussian_mixture:
         if component.tag == 2:
             assert np.isclose(component.state_vector, detection1.state_vector,
@@ -128,3 +130,9 @@ def test_gmphd_multi_target_tracker_cycle(
         if component.tag == 3:
             assert np.isclose(component.state_vector, detection2.state_vector,
                               atol=1e-1)
+    # Check tracks
+    for key, value in tracker.tracks:
+        if key == 2:
+            assert value[0] == tracker.gaussian_mixture[0]
+        elif key == 3:
+            assert value[0] == tracker.gaussian_mixture[1]

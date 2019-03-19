@@ -2,7 +2,7 @@ from .base import Tracker
 from ..base import Property
 from ..reader import DetectionReader
 from ..predictor import Predictor
-from ..types import TaggedWeightedGaussianState, GaussianMixtureState
+from ..types import TaggedWeightedGaussianState, GaussianMixtureState, Track
 from ..updater import Updater
 from ..hypothesiser import GMMahalanobisDistanceHypothesiser
 from ..dataassociator.neighbour import GaussianMixtureAssociator
@@ -14,7 +14,6 @@ class GaussianMixtureMultiTargetTracker(Tracker):
     Base class for Gaussian Mixture style implementations of
     point process derived filters
     """
-
     detector = Property(
         DetectionReader,
         default=None,
@@ -32,11 +31,15 @@ class GaussianMixtureMultiTargetTracker(Tracker):
         default=None,
         doc="""Gaussian Mixture modelling the
                 intensity over the target state space.""")
+    tracks = Property(
+        dict,
+        default={},
+        doc="""Dictionary containing the unique tags as keys and target
+               tracks objects as values.""")
     data_associator = Property(
         GaussianMixtureAssociator,
         default=None,
         doc="Association algorithm to pair predictions to detections")
-
     reducer = Property(
         GaussianMixtureReducer,
         default=None,
@@ -144,11 +147,72 @@ class GaussianMixtureMultiTargetTracker(Tracker):
         """
         raise NotImplementedError
 
+    @property
     def tracks(self):
-        pass
+        """
+        The currently active tracks (:class:`Track`) associated with
+        the filter.
+
+        Parameters
+        ==========
+        self : :state:`GaussianMixtureMultiTargetTracker`
+            Current GM Multi Target Tracker at time :math:`k`
+
+        Note
+        ======
+        Each track shares a unique tag with its associated component
+        """
+        if self.tracks is not None:
+            for key, track in self.tracks:
+                if track.active:
+                    yield track
+        else:
+            return
 
     def tracks_gen(self):
-        pass
+        """
+        Updates the tracks (:class:`Track`) associated with the filter.
+
+        Parameters
+        ==========
+        self : :state:`GaussianMixtureMultiTargetTracker`
+            Current GM Multi Target Tracker at time :math:`k`
+
+        Note
+        ======
+        Each track shares a unique tag with its associated component
+        """
+        for component in self.gaussian_mixture:
+            tag = str(component.tag)
+            if tag != "1":
+                # Sanity check for birth component
+                if tag in self.tracks:
+                    # Track found, so update it
+                    track = self.tracks[tag]
+                    track.states.append(component)
+                else:
+                    # No Track found, so create a new one only if we are
+                    # reasonably confident its a target
+                    if component.weight > \
+                            self.gaussian_mixture.estimation_threshold:
+                        self.tracks[tag] = Track([component], id=tag)
+
+    def end_tracks(self):
+        """
+        Ends the tracks (:class:`Track`) that do not have an associated
+        component within the filter.
+
+        Parameters
+        ==========
+        self : :state:`GaussianMixtureMultiTargetTracker`
+            Current GM Multi Target Tracker at time :math:`k`
+        """
+        component_tags = [component.tag for component in self.gaussian_mixture]
+        for tag, component in self.tracks:
+            if tag not in component_tags:
+                # Track doesn't have matching component, so end
+                self.tracks[tag].active = False
+            component_tags.remove(tag)
 
     @property
     def estimated_number_of_targets(self):
