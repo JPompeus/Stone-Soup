@@ -11,7 +11,7 @@ from ..mixturereducer import GaussianMixtureReducer
 
 class GaussianMixtureMultiTargetTracker(Tracker):
     """
-    Base class for Gaussian Mixture style implmentations of
+    Base class for Gaussian Mixture style implementations of
     point process derived filters
     """
 
