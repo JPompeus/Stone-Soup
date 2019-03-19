@@ -158,9 +158,6 @@ class TaggedWeightedGaussianState(WeightedGaussianState):
     """
     tag = Property(int, default=0, doc="Unique tag of the Gaussian State.")
 
-    def __init__(self, state_vector, covar, *args, **kwargs):
-        super().__init__(state_vector, covar, *args, **kwargs)
-
 
 class ParticleState(Type):
     """Particle State type
