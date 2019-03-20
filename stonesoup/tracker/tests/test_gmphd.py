@@ -131,8 +131,8 @@ def test_gmphd_multi_target_tracker_cycle(
             assert np.isclose(component.state_vector, detection2.state_vector,
                               atol=1e-1)
     # Check tracks
-    for key, value in tracker.tracks:
+    for key in tracker.target_tracks:
         if key == 2:
-            assert value[0] == tracker.gaussian_mixture[0]
+            assert tracker.target_tracks[key] == tracker.gaussian_mixture[0]
         elif key == 3:
-            assert value[0] == tracker.gaussian_mixture[1]
+            assert tracker.target_tracks[key] == tracker.gaussian_mixture[1]

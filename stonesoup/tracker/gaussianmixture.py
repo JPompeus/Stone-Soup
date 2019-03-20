@@ -31,7 +31,7 @@ class GaussianMixtureMultiTargetTracker(Tracker):
         default=None,
         doc="""Gaussian Mixture modelling the
                 intensity over the target state space.""")
-    tracks = Property(
+    target_tracks = Property(
         dict,
         default={},
         doc="""Dictionary containing the unique tags as keys and target
@@ -149,25 +149,7 @@ class GaussianMixtureMultiTargetTracker(Tracker):
 
     @property
     def tracks(self):
-        """
-        The currently active tracks (:class:`Track`) associated with
-        the filter.
-
-        Parameters
-        ==========
-        self : :state:`GaussianMixtureMultiTargetTracker`
-            Current GM Multi Target Tracker at time :math:`k`
-
-        Note
-        ======
-        Each track shares a unique tag with its associated component
-        """
-        if self.tracks is not None:
-            for key, track in self.tracks:
-                if track.active:
-                    yield track
-        else:
-            return
+        pass
 
     def tracks_gen(self):
         """
@@ -184,18 +166,20 @@ class GaussianMixtureMultiTargetTracker(Tracker):
         """
         for component in self.gaussian_mixture:
             tag = str(component.tag)
+            print("Looking for track {0}".format(tag))
             if tag != "1":
                 # Sanity check for birth component
-                if tag in self.tracks:
+                if tag in self.target_tracks:
                     # Track found, so update it
-                    track = self.tracks[tag]
+                    track = self.target_tracks[tag]
                     track.states.append(component)
                 else:
                     # No Track found, so create a new one only if we are
                     # reasonably confident its a target
                     if component.weight > \
-                            self.gaussian_mixture.estimation_threshold:
-                        self.tracks[tag] = Track([component], id=tag)
+                            self.gaussian_mixture.extraction_threshold:
+                        self.target_tracks[tag] = Track([component], id=tag)
+        self.end_tracks()
 
     def end_tracks(self):
         """
@@ -208,11 +192,10 @@ class GaussianMixtureMultiTargetTracker(Tracker):
             Current GM Multi Target Tracker at time :math:`k`
         """
         component_tags = [component.tag for component in self.gaussian_mixture]
-        for tag, component in self.tracks:
+        for tag in self.target_tracks:
             if tag not in component_tags:
                 # Track doesn't have matching component, so end
-                self.tracks[tag].active = False
-            component_tags.remove(tag)
+                self.target_tracks[tag].active = False
 
     @property
     def estimated_number_of_targets(self):
