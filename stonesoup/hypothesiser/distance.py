@@ -104,7 +104,7 @@ class DistanceHypothesiser(Hypothesiser):
 
 
 class GMMahalanobisDistanceHypothesiser(Hypothesiser):
-    """Gaussian Mixture Prediction Hypothesiser based on Mahalanobis Distance
+    """Gaussian Mixture Prediction Hypothesiser based on a Distance Measure
 
     Generate Gaussian Mixture component predictions at detection times and
     score each hypothesised prediction-detection pair using the Mahalanobis
