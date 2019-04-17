@@ -7,6 +7,7 @@ from ..predictor import Predictor
 from ..types.multihypothesis import \
     MultipleHypothesis
 from ..types.hypothesis import SingleDistanceHypothesis
+from ..types.multihypothesis import MultipleHypothesis
 from ..types.detection import MissedDetection
 from ..updater import Updater
 
@@ -123,6 +124,9 @@ class GMMahalanobisDistanceHypothesiser(Hypothesiser):
         doc="Distance in standard deviations at which association between "
             "Gaussian Mixture component and detection is low enough to be "
             "ignored.")
+    measure = Property(
+        Measure,
+        doc="Measure class used to calculate the distance between two states.")
 
     def hypothesise(self, predict_state, detections, timestamp):
         """Form hypotheses for associations between Detections and Gaussian
@@ -154,10 +158,8 @@ class GMMahalanobisDistanceHypothesiser(Hypothesiser):
             for component in predict_state:
                 measurement_prediction = \
                     self.updater.get_measurement_prediction(component)
-                distance = mahalanobis(detection.state_vector,
-                                       measurement_prediction.state_vector,
-                                       np.linalg.inv(
-                                           measurement_prediction.covar))
+                distance = self.measure(measurement_prediction,
+                                        detection)
 
                 if distance < self.association_distance:
                     this_detect_hypotheses.append(
