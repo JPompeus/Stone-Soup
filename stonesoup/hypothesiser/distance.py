@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from .base import Hypothesiser
-from ..base import Property
+from ..base import Property, Measure
 from ..types import SingleDistanceHypothesis
 from ..types.multihypothesis import MultipleHypothesis
 from ..predictor import Predictor
