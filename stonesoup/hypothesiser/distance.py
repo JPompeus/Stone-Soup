@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from .base import Hypothesiser
 from ..base import Property
-from .. import measures
+from .. import measures as Measure
 from ..types import SingleDistanceHypothesis
 from ..types.multihypothesis import MultipleHypothesis
 from ..predictor import Predictor
@@ -157,10 +157,8 @@ class GMMahalanobisDistanceHypothesiser(Hypothesiser):
             this_detect_hypotheses = list()
 
             for component in predict_state:
-                measurement_prediction = \
-                    self.updater.get_measurement_prediction(component)
-                distance = self.measure(measurement_prediction,
-                                        detection)
+                measurement_prediction = self.updater.predict_measurement( component, detection.measurement_model)
+                distance = self.measure(measurement_prediction, detection)
 
                 if distance < self.association_distance:
                     this_detect_hypotheses.append(
