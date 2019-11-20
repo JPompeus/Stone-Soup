@@ -105,12 +105,11 @@ class DistanceHypothesiser(Hypothesiser):
         return sorted(hypotheses, reverse=True)
 
 
-class GMMahalanobisDistanceHypothesiser(Hypothesiser):
-    """Gaussian Mixture Prediction Hypothesiser based on a Distance Measure
+class GaussianMixtureHypothesier(Hypothesiser):
+    """Gaussian Mixture Prediction Hypothesiser based on an underlying Hypothesiser
 
-    Generate Gaussian Mixture component predictions at detection times and
-    score each hypothesised prediction-detection pair using the Mahalanobis
-    Distance.
+    Generates a list of :class:`MultipleHypothesis`, where each MultipleHypothesis in the list contains SingleHypotheses
+            pertaining to an individual component-detection hypothesis
     """
 
     predictor = Property(
@@ -119,19 +118,17 @@ class GMMahalanobisDistanceHypothesiser(Hypothesiser):
     updater = Property(
         Updater,
         doc="Updater used to get measurement prediction")
-    association_distance = Property(
-        int,
-        default=4,
-        doc="Distance in standard deviations at which association between "
-            "Gaussian Mixture component and detection is low enough to be "
-            "ignored.")
-    measure = Property(
-        Measure,
-        doc="Measure class used to calculate the distance between two states.")
+    hypothesiser = Property(
+        Hypothesiser,
+        doc="Underlying Hypothesiser used to generate component-detection hypotheses")   
+    order_by_detection = Property(
+        bool,
+        default=false
+        doc="Flag to order the :class:`MultipleHypothesis` list by detection or component")    
 
     def hypothesise(self, predict_state, detections, timestamp):
         """Form hypotheses for associations between Detections and Gaussian
-        Mixture components, discard those with too great a distance.
+        Mixture components.
 
         Parameters
         ----------
@@ -151,22 +148,14 @@ class GMMahalanobisDistanceHypothesiser(Hypothesiser):
         """
 
         hypotheses = list()
+        reordered_hypotheses = list()
+        for component in predict_state:
+            component_hypotheses = self.hypothesiser.hypothesise(component, detections, timestamp)
+            # Reorder list of MultipleHypothesis so that they are ordered by detection, not component
+            if self.order_by_detection:
+                for detection in detections:
 
-        for detection in detections:
-
-            this_detect_hypotheses = list()
-
-            for component in predict_state:
-                measurement_prediction = self.updater.predict_measurement( component, detection.measurement_model)
-                distance = self.measure(measurement_prediction, detection)
-
-                if distance < self.association_distance:
-                    this_detect_hypotheses.append(
-                        SingleDistanceHypothesis(
-                            component, detection, distance,
-                            measurement_prediction=measurement_prediction))
-
-            if len(this_detect_hypotheses) > 0:
-                hypotheses.append(MultipleHypothesis(this_detect_hypotheses))
-
+            if len(component_hypotheses) > 0:
+                hypotheses.append(MultipleHypothesis(component_hypotheses))
+                            
         return hypotheses
