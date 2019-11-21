@@ -20,17 +20,6 @@ class GaussianMixtureState(Type, Sized, Iterable, Container):
         doc="""The initial list of :class:`WeightedGaussianState` components.
         Default `None` which initialises with empty list.""")
 
-    current_tag = Property(
-        int,
-        default=2,
-        doc="""The tag number that should be assigned for the latest
-        component""")
-
-    extraction_threshold = Property(
-        float,
-        default=0.5,
-        doc="""The threshold to used to extract "active" states
-        from the Gaussian Mixture""")
 
     def __init__(self, components=[], *args, **kwargs):
         super().__init__(components, *args, **kwargs)
@@ -87,10 +76,3 @@ class GaussianMixtureState(Type, Sized, Iterable, Container):
 
     def append(self, component):
         return self.components.append(component)
-
-    def extract_states(self):
-        extracted_states = []
-        for component in self:
-            if component.weight > self.extraction_threshold:
-                extracted_states.append(component)
-        return extracted_states

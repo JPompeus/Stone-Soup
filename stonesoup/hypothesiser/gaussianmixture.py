@@ -1,19 +1,17 @@
 # -*- coding: utf-8 -*-
 from .base import Hypothesiser
 from ..base import Property
-from ..types import SingleDistanceHypothesis
-from ..types.multihypothesis import MultipleHypothesis
 from ..predictor import Predictor
-from ..types.track import Track
-from ..types.multihypothesis import \
-    MultipleHypothesis
+from ..types.detection import MissedDetection
 from ..types.hypothesis import SingleDistanceHypothesis
 from ..types.multihypothesis import MultipleHypothesis
-from ..types.detection import MissedDetection
+from ..types.numeric import Probability
+from ..types.state import TaggedWeightedGaussianState
+from ..types.track import Track
 from ..updater import Updater
 
 
-class GaussianMixtureHypothesier(Hypothesiser):
+class GaussianMixtureHypothesiser(Hypothesiser):
     """Gaussian Mixture Prediction Hypothesiser based on an underlying Hypothesiser
 
     Generates a list of :class:`MultipleHypothesis`, where each MultipleHypothesis in the list contains SingleHypotheses
@@ -32,8 +30,16 @@ class GaussianMixtureHypothesier(Hypothesiser):
     order_by_detection = Property(
         bool,
         default=False,
-        doc="Flag to order the :class:`MultipleHypothesis` list by detection or component")    
-
+        doc="Flag to order the :class:`MultipleHypothesis` list by detection or component")  
+    prob_survival = Property(
+        Probability,
+        default=1,
+        doc="Probability of a component surviving until the next timestep")    
+    birth_component = Property(
+        TaggedWeightedGaussianState,
+        default=None,
+        doc="""The birth component. The weight is equal to the mean of the
+        expected number of births per timestep (Poission distributed)""")
     def hypothesise(self, predict_state, detections, timestamp):
         """Form hypotheses for associations between Detections and Gaussian
         Mixture components.
@@ -59,9 +65,8 @@ class GaussianMixtureHypothesier(Hypothesiser):
         hypotheses = list()
         for component in predict_state:
             # Get hypotheses for that component for all measurements
+            component.weight *= self.prob_survival
             component_hypotheses = self.hypothesiser.hypothesise(component, detections, timestamp)
-            # Remove any :class:`MissedDetection` hypotheses
-            component_hypotheses[:] = [x for x in component_hypotheses if not isinstance(x.measurement, MissedDetection)]
             # Create Multiple Hypothesis and add to list
             if len(component_hypotheses) > 0:
                 hypotheses.append(MultipleHypothesis(component_hypotheses))
@@ -75,6 +80,8 @@ class GaussianMixtureHypothesier(Hypothesiser):
                     single_hypothesis_list.append(single_hypothesis)
             
             reordered_hypotheses = list()
+            # Get miss detected components
+            miss_detections_hypothesis = MultipleHypothesis([x for x in single_hypothesis_list if isinstance(x.measurement, MissedDetection)])
             for detection in detections:
                  # Create multiple hypothesis per detection
                 indices \
@@ -82,6 +89,8 @@ class GaussianMixtureHypothesier(Hypothesiser):
                 detection_multiple_hypothesis = MultipleHypothesis(list(map(single_hypothesis_list.__getitem__, indices)))
                 # Add to new list
                 reordered_hypotheses.append(detection_multiple_hypothesis)
+            # Add miss detected hypothesis to end
+            reordered_hypotheses.append(miss_detections_hypothesis)
             # Assign reordered list to original list
             hypotheses = reordered_hypotheses
 

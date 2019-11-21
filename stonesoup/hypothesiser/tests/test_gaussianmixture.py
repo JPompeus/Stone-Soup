@@ -5,7 +5,7 @@ import datetime
 import numpy as np
 
 from ..distance import DistanceHypothesiser
-from ..gaussianmixture import GaussianMixtureHypothesier
+from ..gaussianmixture import GaussianMixtureHypothesiser
 
 from ...types.detection import Detection
 from ...types.state import GaussianState, WeightedGaussianState
@@ -32,7 +32,7 @@ def test_gm_ordered_by_measurement(predictor, updater):
     measure = measures.Mahalanobis()
     hypothesiser = DistanceHypothesiser(
         predictor, updater, measure=measure, missed_distance=20)
-    hypothesiser = GaussianMixtureHypothesier(predictor, updater,
+    hypothesiser = GaussianMixtureHypothesiser(predictor, updater,
                                                      hypothesiser=hypothesiser,
                                                      order_by_detection=True)
 
@@ -44,7 +44,7 @@ def test_gm_ordered_by_measurement(predictor, updater):
                for multi_hyp in hypotheses)
     assert all(isinstance(hyp, SingleHypothesis)
                for multi_hyp in hypotheses for hyp in multi_hyp)
-    assert len(hypotheses) == 2
+    assert len(hypotheses) == 3 # Last elemet is the miss detected components
     assert len(hypotheses[0]) == 2
     assert len(hypotheses[1]) == 2
 
@@ -80,21 +80,22 @@ def test_gm_ordered_by_component(predictor, updater):
     measure = measures.Mahalanobis()
     hypothesiser = DistanceHypothesiser(
         predictor, updater, measure=measure, missed_distance=20)
-    hypothesiser = GaussianMixtureHypothesier(predictor, updater,
+    hypothesiser = GaussianMixtureHypothesiser(predictor, updater,
                                                      hypothesiser=hypothesiser,
                                                      order_by_detection=False)
 
     hypotheses = hypothesiser.hypothesise(gaussian_mixture,
                                           detections, timestamp)
 
-    # There are 4 hypotheses - 2 each associated with detection1/detection2
+    # There are 6 hypotheses - 2 each associated with detection1/detection then 2 miss detected components
     assert all(isinstance(multi_hyp, MultipleHypothesis)
                for multi_hyp in hypotheses)
     assert all(isinstance(hyp, SingleHypothesis)
                for multi_hyp in hypotheses for hyp in multi_hyp)
     assert len(hypotheses) == 2
-    assert len(hypotheses[0]) == 2
-    assert len(hypotheses[1]) == 2
+    # Last element in each array isthe miss detected component
+    assert len(hypotheses[0]) == 3
+    assert len(hypotheses[1]) == 3
 
     # each SingleHypothesis has a distance attribute
     assert all(hyp.distance >= 0

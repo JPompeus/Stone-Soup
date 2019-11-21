@@ -3,6 +3,7 @@ import datetime
 from collections.abc import MutableSequence
 
 import numpy as np
+import uuid
 
 from ..base import Property
 from .array import StateVector, CovarianceMatrix
@@ -156,7 +157,7 @@ class TaggedWeightedGaussianState(WeightedGaussianState):
     Gaussian State object with an associated weight and tag. Used as components
     for a GaussianMixtureState.
     """
-    tag = Property(int, default=0, doc="Unique tag of the Gaussian State.")
+    tag = Property(uuid.UUID, default=None, doc="Unique tag of the Gaussian State.")
 
 
 class ParticleState(Type):
