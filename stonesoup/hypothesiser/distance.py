@@ -70,10 +70,7 @@ class DistanceHypothesiser(Hypothesiser):
         hypotheses = list()
 
         # Common state & measurement prediction
-        if isinstance(track, Track):
-            prediction = self.predictor.predict(track.state, timestamp=timestamp)
-        else:
-            prediction = self.predictor.predict(track, timestamp=timestamp)
+        prediction = self.predictor.predict(track, timestamp=timestamp)
 
         measurement_prediction = self.updater.predict_measurement(
             prediction)
@@ -88,13 +85,6 @@ class DistanceHypothesiser(Hypothesiser):
 
         # True detection hypotheses
         for detection in detections:
-
-            # Common state & measurement prediction
-            if isinstance(track, Track):
-                prediction = self.predictor.predict(track.state, timestamp=timestamp)
-            else:
-                prediction = self.predictor.predict(track, timestamp=timestamp)
-
             # Compute measurement prediction and distance measure
             measurement_prediction = self.updater.predict_measurement(
                 prediction, detection.measurement_model)

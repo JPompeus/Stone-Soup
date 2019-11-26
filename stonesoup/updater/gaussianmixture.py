@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from abc import abstractmethod
 
 import numpy as np
 from functools import lru_cache
@@ -9,10 +10,9 @@ from ..base import Property
 from .base import Updater
 from .kalman import KalmanUpdater
 from ..types.prediction import GaussianMeasurementPrediction
-from ..types.update import GaussianStateUpdate
+from ..types.update import GaussianStateUpdate, GaussianMixtureUpdate
 from ..types.numeric import Probability
 from ..types import TaggedWeightedGaussianState
-
 
 
 class GaussianMixtureUpdater(Updater):
@@ -21,23 +21,33 @@ class GaussianMixtureUpdater(Updater):
     updater = Property(
         KalmanUpdater,
         default=None,
-        doc="Underlying updater used to perform the single target Kalman Update.")
-
-    prob_of_detection = Property(
-        Probability,
-        default=0.9,
-        doc="""The probability that an exisiting target is detected
-                at each timestep""")
+        doc="Underlying updater used to perform the single target Kalman Update.") 
+        
     clutter_spatial_density = Property(
         float,
-        default=1e-10,
-        doc="""The clutter intensity at a point in the state point.""")
+        default=1,
+        doc="Spatial density of the clutter process uniformly distributed across the state space.")
+
+    normalisation = Property(
+        bool,
+        default=True,
+        doc="Flag for normalisation")    
     
+    prob_detection = Property(
+        float,
+        default=1,
+        doc="Probability of a target being detected at the current timestep") 
+
+    prob_survival = Property(
+        float,
+        default=1,
+        doc="Probability of a target surviving until the next timestep")  
 
     def update(self, hypotheses):
         """
         Updates the current components in a
-        :state:`GaussianMixtureState` by applying the underlying :class:`KalmanUpdater` to each component with the supplied measurements.
+        :state:`GaussianMixture` by applying the underlying :class:`KalmanUpdater` updater 
+        to each component with the supplied measurements.
 
         Parameters
         ==========
@@ -46,15 +56,16 @@ class GaussianMixtureUpdater(Updater):
 
         Returns
         =======
-        updated_components : :state:`GMPHDTargetTracker`
-            GMPHD Tracker with updated components at time :math:`k+1`
+        updated_components : :state:`GaussianMixtureUpdate`
+            GaussianMixtureMultiTargetTracker with updated components at time :math:`k+1`
         """
-        updated_components = []
+        updated_components = list()
+        weight_sum_list = list()
         # Loop over all measurements
         for i in range(len(hypotheses)-1):
-            updated_measurement_components = []
+            updated_measurement_components = list()
             # Initialise weight sum for measurement to clutter intensity
-            weight_sum = self.clutter_spatial_density
+            weight_sum = 0
             # For every valid single hypothesis, update that component with
             # measurements and calculate new weight
             for j in range(len(hypotheses[i])):
@@ -68,36 +79,120 @@ class GaussianMixtureUpdater(Updater):
                     mean=measurement_prediction.mean.flatten(),
                     cov=measurement_prediction.covar
                 )
-                new_weight = self.prob_of_detection*prediction.weight*q
+                new_weight = self.prob_detection*prediction.weight*q*self.prob_survival
                 weight_sum += new_weight
                 # Perform single target Kalman Update
                 temp_updated_component = self.updater.update(hypotheses[i][j])
                 updated_component = TaggedWeightedGaussianState(
-                    tag=prediction.tag,
+                    tag=prediction.tag if prediction.tag != 0 else None,
                     weight=new_weight,
                     state_vector=temp_updated_component.mean,
                     covar=temp_updated_component.covar,
                     timestamp=temp_updated_component.timestamp
                 )
-                # Assign new tag if spawned from birth component
-                if updated_component.tag == 0:
-                    updated_component.tag = uuid.uuid4()
                 # Add updated component to mixture
                 updated_measurement_components.append(updated_component)
+            weight_sum_list.append(weight_sum)
             for component in updated_measurement_components:
-                component.weight /= weight_sum
+                if self.normalisation:
+                    component.weight /= (weight_sum + self.clutter_spatial_density)
                 updated_components.append(component)
-        for missed_detected_hypotheses in hypotheses[-1]:
+
+        # Calculate the correction terms
+        l1 = self._calculate_update_terms(weight_sum_list, hypotheses)
+
+        for missed_detected_hypotheses in hypotheses:
             # Add all active components except birth component back into
-            # mixture
+            # mixture as miss detected components
             if not component.tag == 0:
                 component =  TaggedWeightedGaussianState(
                     tag=missed_detected_hypotheses.prediction.tag,
-                    weight=missed_detected_hypotheses*(1-self.prob_of_detection),
+                    weight=missed_detected_hypotheses*(1-self.prob_detection)*l1,
                     state_vector=missed_detected_hypotheses.prediction.mean,
                     covar=missed_detected_hypotheses.prediction.covar,
-                    timestamp=temp_updated_component.timestamp)
+                    timestamp=missed_detected_hypotheses.measurement.timestamp)
                 updated_components.append(component)
         # Return updated components
-        return updated_components
-            
+        return GaussianMixtureUpdate(updated_components)
+
+    @abstractmethod
+    def _calculate_update_terms(self, updated_sum_list, hypotheses):
+        pass
+
+class PHDUpdater(GaussianMixtureUpdater):
+    """
+    A implementation of the Gaussian Mixture
+    Probability Hypothesis Density (GM-PHD) multi-target filter
+
+    References
+    ----------
+
+    .. [1] B.-N. Vo and W.-K. Ma, “The Gaussian Mixture Probability Hypothesis
+    Density Filter,” Signal Processing,IEEE Transactions on, vol. 54, no. 11,
+    pp. 4091–4104, 2006..
+    """
+    @staticmethod
+    def _calculate_update_terms(updated_sum_list, hypotheses):
+        return 1
+
+class LCCUpdater(GaussianMixtureUpdater):
+    """
+    A implementation of the Gaussian Mixture
+    Linear Complexity with Cumulants (GM-LCC) multi-target filter
+
+    References
+    ----------
+
+    .. [1] D. E. Clark and F. De Melo. “A Linear-Complexity Second-Order
+        Multi-Object Filter via Factorial Cumulants”. In: 2018 21st International
+        Conference on Information Fusion (FUSION). 2018. DOI: 10.
+        23919/ICIF.2018.8455331. ..
+    """
+    mean_number_of_false_alarms = Property(
+        float,
+        default=1,
+        doc="Mean number of false alarms (clutter) expected per timestep") 
+
+    variance_of_false_alarms = Property(
+        float,
+        default=1,
+        doc="Variance on the number of false alarms (clutter) expected per timestep") 
+
+
+    def __init__(self, *args, **kwargs):    
+        super().__init__(*args, **kwargs)
+        self.second_order_cumulant = 0
+        self.second_order_false_alarm_cumulant = self.variance_of_false_alarms \
+                                                - self.mean_number_of_false_alarms
+    
+    def _calculate_update_terms(self, updated_sum_list, hypotheses):
+        """
+        Calculate the higher order terms used in the LCC Filter 
+        """
+        # Get the predicted weight sum
+        predicted_weight_sum = sum(hypothesis.prediction.weight for hypothesis in
+                                              hypotheses[-1])
+        # Second order predicted cumulant c(2)
+        predicted_c2 = predicted_weight_sum * self.prob_survival**2
+        # Detected predicted weight mu_d
+        detected_weight_sum = self.prob_detection*predicted_weight_sum
+        # Detected predicted weight mu_phi
+        misdetected_weight_sum = (1-self.prob_detection)*predicted_weight_sum
+        # Calculate the alpha of the predicted Panjer process
+        alpha_pred = ((predicted_weight_sum + self.mean_number_of_false_alarms)**2)\
+                    /(predicted_c2+self.second_order_false_alarm_cumulant)       
+        # Calculate l1 and l2 correction factors
+        denominator = alpha_pred + detected_weight_sum \
+                    + self.mean_number_of_false_alarms
+        number_of_measurements = len(hypotheses)-1
+        numerator = alpha_pred + number_of_measurements
+        l1 = numerator/denominator
+        l2 = numerator/(denominator**2)
+        # Calculate updated c(2)
+        detected_c2 = sum((updated_sum_list/(updated_sum_list \
+                    + self.clutter_spatial_density))**2)
+        misdetected_c2 = (misdetected_weight_sum**2)*l2
+        self.second_order_cumulant = misdetected_c2 - detected_c2
+        # Return the l1 correction factor for miss detected weight update
+        return l1
+    

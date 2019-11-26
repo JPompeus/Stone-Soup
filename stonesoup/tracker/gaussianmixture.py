@@ -1,8 +1,9 @@
+
 from .base import Tracker
 from ..base import Property
 from ..reader import DetectionReader
 from ..predictor import Predictor
-from ..types import TaggedWeightedGaussianState, GaussianMixtureState, Track
+from ..types import TaggedWeightedGaussianState, GaussianMixture, Track
 from ..updater import Updater
 from ..hypothesiser.gaussianmixture import GaussianMixtureHypothesiser
 from ..mixturereducer import GaussianMixtureReducer
@@ -11,7 +12,7 @@ from .. import measures
 
 class GaussianMixtureMultiTargetTracker(Tracker):
     """
-    Base class for Gaussian Mixture style implementations of
+    Base class for Gaussian Mixture (GM) style implementations of
     point process derived filters
     """
     detector = Property(
@@ -27,15 +28,10 @@ class GaussianMixtureMultiTargetTracker(Tracker):
         default=None,
         doc="Updater used to update the objects to their new state.")
     gaussian_mixture = Property(
-        GaussianMixtureState,
+        GaussianMixture,
         default=None,
         doc="""Gaussian Mixture modelling the
                 intensity over the target state space.""")
-    target_tracks = Property(
-        dict,
-        default={},
-        doc="""Dictionary containing the unique tags as keys and target
-               tracks objects as values.""")
     hypothesiser = Property(
         GaussianMixtureHypothesiser,
         default=None,
@@ -53,17 +49,14 @@ class GaussianMixtureMultiTargetTracker(Tracker):
         default=None,
         doc="""The birth component. The weight should be equal to the mean of the
         expected number of births per timestep (Poission distributed)""")
+   
+   
 
-    def __init__(self, *args, **kwargs):
-        if ("components" in kwargs):
-            components = kwargs.pop("components")
-        else:
-            components = []
-
+    def __init__(self, *args, **kwargs):    
         super().__init__(*args, **kwargs)
-        self.gaussian_mixture = GaussianMixtureState(
-            components=components
-        )
+        if self.gaussian_mixture is None:
+            self.gaussian_mixture = GaussianMixture()
+        self.target_tracks = dict()
 
     @property
     def tracks(self):
@@ -80,25 +73,42 @@ class GaussianMixtureMultiTargetTracker(Tracker):
         Each track shares a unique tag with its associated component
         """
         for component in self.gaussian_mixture:
-            tag = str(component.tag)
-            print("Looking for track {0}".format(tag))
-            if tag != "1":
-                # Sanity check for birth component
-                if tag in self.target_tracks:
-                    # Track found, so update it
-                    track = self.target_tracks[tag]
-                    track.states.append(component)
-                else:
-                    # No Track found, so create a new one only if we are
-                    # reasonably confident its a target
-                    if component.weight > \
-                            self.extraction_threshold:
-                        self.target_tracks[tag] = Track([component], id=tag)
+            tag = component.tag
+            if tag != 0:
+                    # Sanity check for birth component
+                    if tag in self.target_tracks:
+                        # Track found, so update it
+                        track = self.target_tracks[tag]
+                        track.states.append(component)
+                    else:
+                        # No Track found, so create a new one only if we are
+                        # reasonably confident its a target
+                        if component.weight > \
+                                self.extraction_threshold:
+                            self.target_tracks[tag] = Track([component], id=tag)
         self.end_tracks()
 
 
     def tracks_gen(self):
-        pass
+        for time, detections in self.detector:
+            # Add birth component
+            self.birth_component.timestamp = time
+            self.gaussian_mixture.append(self.birth_component)
+            # Perform GM Prediction and generate hypotheses
+            if self.gaussian_mixture:
+                hypotheses = self.hypothesiser.hypothesise(
+                            self.gaussian_mixture.components,
+                            detections,
+                            time
+                            )
+            # Perform GM Update
+            self.gaussian_mixture = self.updater.update(hypotheses)
+            # Reduce mixture - Pruning and Merging
+            self.gaussian_mixture.components = \
+                self.reducer.reduce(self.gaussian_mixture.components)
+            # Update the tracks
+            self.tracks()
+            yield time, self.target_tracks
 
     def end_tracks(self):
         """
@@ -117,6 +127,16 @@ class GaussianMixtureMultiTargetTracker(Tracker):
                 self.target_tracks[tag].active = False
 
     @property
+    def extracted_target_states(self):
+        """
+        Extract all target states from the Gaussian Mixture that are above an extraction threshold.
+        """
+        if self.gaussian_mixture:
+            extracted_states = [x for x in self.gaussian_mixture if x.weight > self.extraction_threshold]
+        return extracted_states
+
+
+    @property
     def estimated_number_of_targets(self):
         """
         The number of hypothesised targets.
@@ -127,3 +147,4 @@ class GaussianMixtureMultiTargetTracker(Tracker):
         else:
             estimated_number_of_targets = 0
         return estimated_number_of_targets
+

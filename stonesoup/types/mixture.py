@@ -5,41 +5,31 @@ from ..base import Property
 from .state import TaggedWeightedGaussianState, WeightedGaussianState
 
 
-class GaussianMixtureState(Type, Sized, Iterable, Container):
+class GaussianMixture(Type, Sized, Iterable, Container):
     """
-    Gaussian Mixture State type
+    Gaussian Mixture type
 
-    Represents the target space through a Gaussian Mxture. Individual Gaussian
+    Represents the target space through a Gaussian Mixture. Individual Gaussian
     components are contained in a :class:`list` of
     :class:`WeightedGaussianState`.
     """
 
     components = Property(
         [WeightedGaussianState],
-        default=[],
+        default=None,
         doc="""The initial list of :class:`WeightedGaussianState` components.
         Default `None` which initialises with empty list.""")
 
 
-    def __init__(self, components=[], *args, **kwargs):
-        super().__init__(components, *args, **kwargs)
-        if not isinstance(components, list):
-            components = [components]
-        if len(components) > 0:
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.components is None:
+            self.components = []
+        if len(self.components) > 0:
             if any(not isinstance(component, WeightedGaussianState)
-                    for component in components):
+                    for component in self.components):
                 raise ValueError("Cannot form GaussianMixtureState out of "
                                  "non-WeightedGaussianState inputs!")
-        self.components = components.copy()
-        # Check for existing GaussianMixtureState so unique tag scheme can be
-        # preserved
-        if self.components:
-            if any(isinstance(component, TaggedWeightedGaussianState)
-                    for component in self.components):
-                self.current_tag = max(
-                    self.current_tag,
-                    max([component.tag for component in self.components]) + 1
-                )
 
     def __contains__(self, index):
         # check if 'components' contains any WeightedGaussianState

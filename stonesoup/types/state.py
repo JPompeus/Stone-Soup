@@ -157,7 +157,12 @@ class TaggedWeightedGaussianState(WeightedGaussianState):
     Gaussian State object with an associated weight and tag. Used as components
     for a GaussianMixtureState.
     """
-    tag = Property(uuid.UUID, default=None, doc="Unique tag of the Gaussian State.")
+    tag = Property(str, default=None, doc="Unique tag of the Gaussian State.")
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.tag is None:
+            self.tag = str(uuid.uuid4())
 
 
 class ParticleState(Type):

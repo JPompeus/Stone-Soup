@@ -35,7 +35,10 @@ class GaussianMixtureReducer(MixtureReducer):
                                doc="Threshold for pruning.")
     merge_threshold = Property(float, default=16,
                                doc='Threshold for merging')
-
+    merging = Property(bool, default=True,
+                        doc='Flag for merging')
+    pruning = Property(bool, default=True,
+                        doc='Flag for pruning')
     def reduce(self, components_list):
         """
         Reduce the components of Gaussian Mixture :class:`list`
@@ -53,9 +56,11 @@ class GaussianMixtureReducer(MixtureReducer):
 
             """
         if len(components_list) > 0:
-            components_list = self.prune(components_list)
+            if self.pruning:
+                components_list = self.prune(components_list)
             if len(components_list) > 1:
-                components_list = self.merge(components_list)
+                if self.merging:
+                    components_list = self.merge(components_list)
         return components_list
 
     def prune(self, components_list):
